@@ -41,7 +41,7 @@ This guide will walk you through the process of setting up a **Star Wars Galaxie
 ```bash
 sudo apt update
 sudo apt install git -y
-git clone https://github.com/SWGEvolve/swg-prepare.git
+git clone https://github.com/polsommer/Ubuntu-prepare.git
 ```
 
 ### Step 2: Prepare the Server
