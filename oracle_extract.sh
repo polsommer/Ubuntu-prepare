@@ -15,7 +15,7 @@ sudo dpkg -i oracle-database-preinstall-19c_1.0-2_amd64.deb || sudo apt-get inst
 # Set Paths in Oracle bashrc
 echo -e "\nQueuing PATH setup for Oracle environment\n"
 pause
-sudo bash ~/swg-prepare/oracle_paths.sh
+sudo bash ~/Ubuntu-prepare-main/oracle_paths.sh
 
 # Create directories and extract Oracle DB
 echo "Creating directories and extracting Oracle Database"
@@ -28,4 +28,4 @@ sudo chmod -R 775 /u01
 # Queue installation scripts for Oracle user
 echo -e "\nQueueing installation scripts for transfer to Oracle user\n"
 pause
-bash ~/swg-prepare/oracle_user.sh
+bash ~/Ubuntu-prepare-main/oracle_user.sh

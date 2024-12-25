@@ -42,12 +42,12 @@ sudo apt install python3.9 python3.9-distutils python3.9-venv python3-pip -y
 # Download Oracle 19.3.0 Database and Preinstall Pack
 echo -e "\nQueueing Oracle Database for download\n"
 pause
-bash ~/swg-prepare/oracle_downloads.sh
+bash ~/Ubuntu-prepare-main/oracle_downloads.sh
 
 # Make directories and extract Oracle DB
 echo -e "\nQueueing Oracle DB Extraction\n"
 pause
-bash ~/swg-prepare/oracle_extract.sh
+bash ~/Ubuntu-prepare-main/oracle_extract.sh
 
 # Set Oracle user password
 echo -e "\nSetting password for Oracle user\n"

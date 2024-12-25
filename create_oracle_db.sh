@@ -17,5 +17,5 @@ sudo lsnrctl start
 echo -e '\n\nCreating Database in silent mode\n\n\n!!! SAFE TO IGNORE WARNINGS ABOUT PASSWORD !!!\n\nThis step may take some time...\n\n\n'
 pause
 # Silent mode database creation
-sudo dbca -silent -createDatabase -responseFile /opt/oracle/swg-prepare/db_create.rsp
+sudo dbca -silent -createDatabase -responseFile /opt/oracle/Ubuntu-prepare-main/db_create.rsp
                                                   

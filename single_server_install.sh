@@ -12,17 +12,17 @@ pause
 
 # Initialize server setup
 echo "Running Initialization Script"
-bash ~/swg-prepare/oinit.sh
+bash ~/Ubuntu-prepare-main/oinit.sh
 
 # Oracle Database Installation
 echo "Running Oracle Installation Scripts"
 pause
-bash ~/swg-prepare/oracle_installer.sh
+bash ~/Ubuntu-prepare-main/oracle_installer.sh
 
 # Create Oracle Service
 echo "Creating Oracle Service"
 pause
-bash ~/swg-prepare/oservice.sh
+bash ~/Ubuntu-prepare-main/oservice.sh
 
 # Prepare dependencies for SWG
 echo "Creating folder for SWG dependencies"
@@ -32,12 +32,12 @@ cd ~/swg_dependencies
 # Download and install Oracle utilities
 echo "Downloading Oracle Utilities"
 pause
-bash ~/swg-prepare/server_downloads.sh
+bash ~/Ubuntu-prepare-main/server_downloads.sh
 
 # Initialize SWG setup
 echo "Running SWG Initialization Script"
 pause
-bash ~/swg-prepare/swginit.sh
+bash ~/Ubuntu-prepare-main/swginit.sh
 
 # Source environment profiles
 echo "Sourcing environment profiles"
@@ -58,4 +58,4 @@ ant swg
 # Copy server configuration
 echo "Copying server configuration file"
 pause
-sudo cp ~/swg-prepare/servercommon.cfg ~/swg-main/exe/linux/servercommon.cfg
+sudo cp ~/Ubuntu-prepare-main/servercommon.cfg ~/swg-main/exe/linux/servercommon.cfg

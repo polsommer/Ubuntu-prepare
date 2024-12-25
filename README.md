@@ -47,7 +47,7 @@ git clone https://github.com/polsommer/Ubuntu-prepare.git
 ### Step 2: Prepare the Server
 Run the main preparation script:
 ```bash
-cd ~/swg-prepare
+cd ~/Ubuntu-prepare-main
 chmod +x *.sh
 bash main.sh
 ```
@@ -95,7 +95,7 @@ The script will handle the following:
 ### Step 5: Configure the SWG Server
 1. Copy the configuration file:
    ```bash
-   sudo cp ~/swg-prepare/servercommon.cfg ~/swg-main/exe/linux/servercommon.cfg
+   sudo cp ~/Ubuntu-prepare-main/servercommon.cfg ~/swg-main/exe/linux/servercommon.cfg
    ```
 
 2. Start the Oracle Database service:

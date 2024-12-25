@@ -55,5 +55,5 @@ menu "Choose Installation Option:" selected_choice "${selections[@]}"
 echo -e "\nSelected choice: $selected_choice\n"
 
 if [ "$selected_choice" = "Single Server Install" ]; then
-    bash ~/swg-prepare/single_server_install.sh
+    bash ~/Ubuntu-prepare-main/single_server_install.sh
 fi

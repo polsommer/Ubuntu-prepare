@@ -3,12 +3,12 @@
 # Copy the Oracle Database service files to systemd directory
 echo "Copying Oracle Database service files to /etc/systemd/system/"
 sudo mkdir -p /etc/systemd/system
-sudo cp ~/swg-prepare/includes/odb/odb.service /etc/systemd/system/
+sudo cp ~/Ubuntu-prepare-main/includes/odb/odb.service /etc/systemd/system/
 
 # Copy start and stop scripts for Oracle Database
 echo "Copying Oracle start/stop scripts to /etc/"
-sudo cp ~/swg-prepare/includes/odb/odb-start.sh /etc/
-sudo cp ~/swg-prepare/includes/odb/odb-stop.sh /etc/
+sudo cp ~/Ubuntu-prepare-main/includes/odb/odb-start.sh /etc/
+sudo cp ~/Ubuntu-prepare-main/includes/odb/odb-stop.sh /etc/
 
 # Set executable permissions for start/stop scripts
 echo "Setting executable permissions for start/stop scripts"
