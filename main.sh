@@ -1,59 +1,68 @@
 #!/bin/bash
 
-# Menu Function
-function menu() {
-    local prompt="$1" outvar="$2"
-    shift
-    shift
-    local options=("$@") cur=0 count=${#options[@]} index=0
-    local esc=$(echo -en "\e") # Cache ESC for handling arrow keys
-    printf "$prompt\n"
-    while true
-    do
-        # Display all options
-        index=0
-        for o in "${options[@]}"
-        do
-            if [ "$index" == "$cur" ]; then
-                echo -e " >\e[7m$o\e[0m" # Highlight the current option
-            else
-                echo "  $o"
-            fi
-            index=$((index + 1))
-        done
+echo "Updating system and installing dependencies..."
+sudo apt-get update
+echo -e "\nDownloading and installing \n"
+pause
+sudo apt-get install -y alien php-dev php-pear libaio1 build-essential wget unzip
+echo -e "\nDownloading and installing \n"
+pause
+sudo apt-get install libxext6:i386
+echo -e "\nDownloading and installing \n"
+pause
+sudo apt-get install libxrender1:i386
+echo -e "\nDownloading and installing \n"
+pause
+sudo apt-get install libxtst6:i386
 
-        read -s -n3 key # Wait for user input
-        if [[ $key == $esc[A ]]; then # Up arrow
-            cur=$((cur - 1))
-            [ "$cur" -lt 0 ] && cur=0
-        elif [[ $key == $esc[B ]]; then # Down arrow
-            cur=$((cur + 1))
-            [ "$cur" -ge $count ] && cur=$((count - 1))
-        elif [[ $key == "" ]]; then # ENTER key
-            break
-        fi
-        echo -en "\e[${count}A" # Move back up to re-render options
-    done
-    printf -v $outvar "${options[$cur]}"
-}
+# Download and install Java (Updated for Ubuntu using Azul OpenJDK)
+echo -e "\nDownloading and installing Azul OpenJDK 17\n"
+pause
+wget https://cdn.azul.com/zulu/bin/zulu17.50.19-ca-jdk17.0.11-linux_amd64.deb
+sudo apt install ./zulu17.50.19-ca-jdk17.0.11-linux_amd64.deb -y
+# Install additional dependencies for 32-bit compatibility
+echo -e "\nInstalling additional dependencies for 32-bit compatibility\n"
+pause
+sudo apt install libxext6:i386 libxrender1:i386 libxtst6:i386 -y
 
-# Define Options
-selections=(
-    "Single Server Install"
-)
+echo -e "\nInitializing Server and Checking for updates\n"
+pause
+sudo apt update && sudo apt upgrade -y
+# Install Python and Pip
+echo -e "\nInstalling Python and Pip\n"
+pause
+sudo apt install python3.9
+sudo apt-get install python3.9-distutils
+sudo apt-get install python3.9-venv
+sudo apt-get install python3-pip
+echo -e "\nDownloading and installing \n"
+pause
 
-# Welcome Message
-echo -e "\n####################"
-echo -e "\nWelcome to the SWG Server Preparation Script!"
-echo -e "\n####################\n"
-echo -e "\nPlease choose your options carefully and refer to the GitHub guide.\n"
+# Make a folder for dependencies
+echo -e "\nCreating a folder for dependencies\n"
+pause
+mkdir -p ~/ora_dependencies
+cd ~/ora_dependencies
 
-# Call Menu
-menu "Choose Installation Option:" selected_choice "${selections[@]}"
+# Set SELinux to Permissive (SELinux is typically not enforced on Ubuntu, but we'll include equivalent commands)
+echo -e "\nDisabling UFW (Firewall)\n"
+pause
+sudo ufw disable
 
-# Process Selection
-echo -e "\nSelected choice: $selected_choice\n"
+# Download Oracle 19.3.0 Database and Preinstall Pack
+echo -e "\nQueueing Oracle Database for download\n"
+pause
+bash ~/Ubuntu-prepare-main/oracle_downloads.sh
 
-if [ "$selected_choice" = "Single Server Install" ]; then
-    bash ~/Ubuntu-prepare-main/single_server_install.sh
-fi
+# Make directories and extract Oracle DB
+echo -e "\nQueueing Oracle DB Extraction\n"
+pause
+bash ~/Ubuntu-prepare-main/oracle_extract.sh
+
+# Set Oracle user password
+echo -e "\nSetting password for Oracle user\n"
+pause
+echo "oracle:swg" | sudo chpasswd
+
+echo -e "\nInitialization and setup completed successfully!"
+
