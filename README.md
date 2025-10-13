@@ -3,7 +3,7 @@
 These are some tools you might be able to use if you want to [build your own SWG Server](https://tekaohswg.github.io/new.html).
 
 > **Note**
-> The helper scripts in this repository now target **openSUSE 16** exclusively. They will abort when executed on any other operating system or distribution release.
+> The helper scripts in this repository now target **openSUSE 16** exclusively.
 
 ## SQL\*Plus bootstrap for the SWG schema
 
@@ -36,6 +36,18 @@ DEFINE SWG_TEMPFILE_DIR = '/u01/app/oracle/oradata/SWG/temp'
 If `SWG_*FILE_DIR` values are omitted, Oracle's `DB_CREATE_FILE_DEST` is used. Review the generated `swgusr.log` for the full execution trace and restart the database if parameter changes are reported.
 
 ## Oracle Instant Client delivery
+
+`install.sh` orchestrates the end-to-end provisioning flow and ties all of the helpers together. Run it as `root` (tested on openSUSE 16) to perform the full installation automatically:
+
+```bash
+sudo ./install.sh
+```
+
+The automation keeps lightweight state under `/var/lib/swg-prepare` to avoid repeating expensive steps and exposes convenience switches:
+
+* `--dry-run` prints the actions that would be executed without applying them.
+* `--force` reruns every helper even when the state file indicates completion.
+* `--skip-oci8` and `--skip-service` allow you to omit the PHP OCI8 extension or systemd service deployment respectively.
 
 `oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for openSUSE. By default the scripts download the artefacts from the maintained Google Drive mirror (via the bundled `gdown.pl` helper):
 
