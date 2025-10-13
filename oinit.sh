@@ -12,9 +12,9 @@ INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
 GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
 GDOWN_DIR="gdown.pl-1.4"
 INSTANTCLIENT_COMPONENTS=(
-    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm"
-    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm"
-    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm"
+    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
+    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
+    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX"
 )
 
 if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then

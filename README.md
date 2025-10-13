@@ -37,7 +37,7 @@ If `SWG_*FILE_DIR` values are omitted, Oracle's `DB_CREATE_FILE_DEST` is used. R
 
 ## Oracle Instant Client delivery
 
-`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for openSUSE. By default the scripts download the artefacts directly from Oracle:
+`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for openSUSE. By default the scripts download the artefacts from the maintained Google Drive mirror (via the bundled `gdown.pl` helper):
 
 * `oracle-instantclient-basiclite-21.18.0.0.0-1.i386.rpm`
 * `oracle-instantclient-devel-21.18.0.0.0-1.i386.rpm`
