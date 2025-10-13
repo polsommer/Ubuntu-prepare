@@ -16,6 +16,11 @@ INSTANTCLIENT_COMPONENTS=(
     "oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm|https://drive.google.com/file/d/1kenKU9WK7gS0OLX1wB3LtonKrPUZT8kH"
 )
 
+AZUL_ZULU_JDK_TARBALL=${AZUL_ZULU_JDK_TARBALL:-zulu17.46.19-ca-jdk17.0.10-linux_i686.tar.gz}
+AZUL_ZULU_JDK_URL=${AZUL_ZULU_JDK_URL:-https://cdn.azul.com/zulu/bin/${AZUL_ZULU_JDK_TARBALL}}
+AZUL_ZULU_CACHE_DIR=${AZUL_ZULU_CACHE_DIR:-/tmp/azul-zulu}
+AZUL_ZULU_INSTALL_ROOT=${AZUL_ZULU_INSTALL_ROOT:-/opt/zulu}
+
 ensure_opensuse_16() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
@@ -108,6 +113,47 @@ install_instantclient_rpms() {
     done
 }
 
+install_azul_zulu_jdk() {
+    local tarball_name=$AZUL_ZULU_JDK_TARBALL
+    local tarball_url=$AZUL_ZULU_JDK_URL
+    local cache_dir=$AZUL_ZULU_CACHE_DIR
+    local install_root=$AZUL_ZULU_INSTALL_ROOT
+    local tarball_path="$cache_dir/$tarball_name"
+
+    mkdir -p "$cache_dir"
+    if [[ ! -f "$tarball_path" ]]; then
+        echo -e "\n💡 Installing 32-bit Azul Zulu JDK 17 on openSUSE...\n"
+        wget -O "$tarball_path" "$tarball_url"
+    fi
+
+    if [[ ! -f "$tarball_path" ]]; then
+        echo "Unable to locate the Azul Zulu JDK archive at $tarball_path" >&2
+        exit 1
+    fi
+
+    mkdir -p "$install_root"
+
+    local extracted_dir
+    if ! extracted_dir=$(tar -tf "$tarball_path" | head -1 | cut -d/ -f1); then
+        echo "Unable to inspect the Azul Zulu JDK archive at $tarball_path" >&2
+        exit 1
+    fi
+    if [[ -z "$extracted_dir" ]]; then
+        echo "Unable to determine the Azul Zulu JDK extraction directory from $tarball_path" >&2
+        exit 1
+    fi
+
+    local target_dir="$install_root/$extracted_dir"
+    if [[ ! -d "$target_dir" ]]; then
+        tar -xzf "$tarball_path" -C "$install_root"
+    fi
+
+    ln -sfn "$target_dir" "$install_root/zulu17"
+
+    append_unique "export JAVA_HOME=${install_root}/zulu17" /etc/profile.d/java.sh
+    append_unique 'export PATH=$JAVA_HOME/bin:$PATH' /etc/profile.d/java.sh
+}
+
 ensure_opensuse_16
 refresh_repos
 
@@ -124,8 +170,6 @@ install_packages \
     gcc-c++ \
     gcc-32bit \
     git \
-    java-11-openjdk \
-    java-11-openjdk-devel \
     libaio1 \
     libaio1-32bit \
     libnsl1-32bit \
@@ -145,6 +189,7 @@ install_packages \
     psmisc \
     python3-ply \
     sqlite3 \
+    tar \
     zlib-devel \
     zlib-devel-32bit
 
@@ -157,6 +202,9 @@ install_optional_packages \
 download_instantclient_rpms
 install_instantclient_rpms
 
+# Install and expose a 32-bit Azul Zulu JDK 17 runtime for the SWG tooling stack
+install_azul_zulu_jdk
+
 # set env vars
 append_unique "${INSTANTCLIENT_LIB}" /etc/ld.so.conf.d/oracle.conf
 append_unique "export ORACLE_HOME=${INSTANTCLIENT_HOME}" /etc/profile.d/oracle.sh
@@ -168,8 +216,3 @@ if [[ -d "${INSTANTCLIENT_INCLUDE}" && ! -e "${INSTANTCLIENT_HOME}/include" ]]; 
 fi
 
 ldconfig
-
-JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")
-if [[ -n "$JAVA_HOME" ]]; then
-    append_unique "export JAVA_HOME=$JAVA_HOME" /etc/profile.d/java.sh
-fi

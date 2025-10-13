@@ -51,3 +51,19 @@ sudo ./swginit.sh
 ```
 
 If you need to populate the cache manually (for offline deployments), drop the three RPMs into the selected directory ahead of time and the scripts will reuse them without re-downloading.
+
+## Azul Zulu 32-bit JDK delivery
+
+`swginit.sh` now installs a dedicated 32-bit Azul Zulu JDK 17 runtime so the emulator and its tooling can run with a consistent, supported Java environment. By default the script downloads the `zulu17.46.19-ca-jdk17.0.10-linux_i686.tar.gz` archive from Azul's CDN, caches it under `/tmp/azul-zulu`, and extracts it into `/opt/zulu`. A stable `JAVA_HOME` symlink (`/opt/zulu/zulu17`) is created and exported via `/etc/profile.d/java.sh` alongside an updated `PATH`.
+
+Customise the download or installation paths as required:
+
+```bash
+export AZUL_ZULU_JDK_TARBALL=zulu17.46.19-ca-jdk17.0.10-linux_i686.tar.gz
+export AZUL_ZULU_JDK_URL=https://cdn.azul.com/zulu/bin/${AZUL_ZULU_JDK_TARBALL}
+export AZUL_ZULU_CACHE_DIR=/var/cache/azul
+export AZUL_ZULU_INSTALL_ROOT=/opt/custom-zulu
+sudo ./swginit.sh
+```
+
+When a tarball is already present in the cache directory, the script will reuse it without hitting the network, allowing completely offline provisioners to seed the archive ahead of time.
