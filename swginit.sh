@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=includes/instantclient.sh
+source "$SCRIPT_DIR/includes/instantclient.sh"
+
 ensure_opensuse_16() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
@@ -62,7 +66,6 @@ refresh_repos
 zypper --non-interactive install --type pattern devel_basis
 
 install_packages \
-    alien \
     ant \
     bc \
     bison \
@@ -77,6 +80,7 @@ install_packages \
     java-11-openjdk-devel \
     libaio1 \
     libaio1-32bit \
+    libnsl1-32bit \
     libcurl4 \
     libcurl4-32bit \
     libgcc_s1-32bit \
@@ -101,19 +105,16 @@ install_optional_packages \
     libboost_program_options1_82_0-32bit
 
 # install oracle instantclients
-alien -i --target=amd64 ~/oracle-instantclient12.2-basiclite-12.2.0.1.0-1.i386.rpm
-alien -i --target=amd64 ~/oracle-instantclient12.2-devel-12.2.0.1.0-1.i386.rpm
-alien -i --target=amd64 ~/oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm
+install_instantclient_rpms
 
 # set env vars
-append_unique "/usr/lib/oracle/12.2/client/lib" /etc/ld.so.conf.d/oracle.conf
-append_unique "export ORACLE_HOME=/usr/lib/oracle/12.2/client" /etc/profile.d/oracle.sh
-append_unique "export PATH=\$PATH:/usr/lib/oracle/12.2/client/bin" /etc/profile.d/oracle.sh
-append_unique "export LD_LIBRARY_PATH=/usr/lib/oracle/12.2/client/lib:/usr/include/oracle/12.2/client" /etc/profile.d/oracle.sh
+append_unique "${INSTANTCLIENT_LIB}" /etc/ld.so.conf.d/oracle.conf
+append_unique "export ORACLE_HOME=${INSTANTCLIENT_HOME}" /etc/profile.d/oracle.sh
+append_unique "export PATH=\$PATH:${INSTANTCLIENT_BIN}" /etc/profile.d/oracle.sh
+append_unique "export LD_LIBRARY_PATH=${INSTANTCLIENT_LIB}:${INSTANTCLIENT_INCLUDE}" /etc/profile.d/oracle.sh
 
-ORACLE_HOME=/usr/lib/oracle/12.2/client
-if [[ -d /usr/include/oracle/12.2/client && ! -e "$ORACLE_HOME/include" ]]; then
-    ln -s /usr/include/oracle/12.2/client "$ORACLE_HOME/include"
+if [[ -d "${INSTANTCLIENT_INCLUDE}" && ! -e "${INSTANTCLIENT_HOME}/include" ]]; then
+    ln -s "${INSTANTCLIENT_INCLUDE}" "${INSTANTCLIENT_HOME}/include"
 fi
 
 ldconfig

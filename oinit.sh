@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=includes/instantclient.sh
+source "$SCRIPT_DIR/includes/instantclient.sh"
+
 ensure_opensuse_16() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
@@ -86,7 +90,6 @@ refresh_repos
 zypper --non-interactive install --type pattern devel_basis
 
 install_packages \
-    alien \
     autoconf \
     automake \
     binutils \
@@ -105,6 +108,8 @@ install_packages \
     less \
     libaio-devel \
     libaio1 \
+    libaio1-32bit \
+    libnsl1-32bit \
     libelf-devel \
     libltdl7 \
     motif-devel \
@@ -190,12 +195,23 @@ append_unique 'export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/
 wget https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip
 unzip v1.4.zip
 rm v1.4.zip
-./gdown.pl-1.4/gdown.pl 'https://drive.google.com/file/d/1srNzRNEiWm98cDbJ8c6SzSxQuSZtDeQG' 'LINUX.X64_213000_db_home.zip'
-./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL' 'oracle-instantclient12.2-basiclite-12.2.0.1.0-1.i386.rpm'
-./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ' 'oracle-instantclient12.2-devel-12.2.0.1.0-1.i386.rpm'
-./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX' 'oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm'
+./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=17wfbfZuL90z4Z_FZPHK7l8FecepZ3dyP' 'LINUX.X64_213000_db_home.zip'
 rm -r gdown.pl-1.4
 mkdir -p /u01/app/oracle/product/21/dbhome_1
 unzip -d /u01/app/oracle/product/21/dbhome_1/ LINUX.X64_213000_db_home.zip
 chown -R oracle:oinstall /u01
+
+# Install the Oracle Instant Client dependencies required by tooling
+install_instantclient_rpms
+
+append_unique "${INSTANTCLIENT_LIB}" /etc/ld.so.conf.d/oracle.conf
+append_unique "export ORACLE_HOME=${INSTANTCLIENT_HOME}" /etc/profile.d/oracle.sh
+append_unique "export PATH=\$PATH:${INSTANTCLIENT_BIN}" /etc/profile.d/oracle.sh
+append_unique "export LD_LIBRARY_PATH=${INSTANTCLIENT_LIB}:${INSTANTCLIENT_INCLUDE}" /etc/profile.d/oracle.sh
+
+if [[ -d "${INSTANTCLIENT_INCLUDE}" && ! -e "${INSTANTCLIENT_HOME}/include" ]]; then
+    ln -s "${INSTANTCLIENT_INCLUDE}" "${INSTANTCLIENT_HOME}/include"
+fi
+
+ldconfig
 chmod -R 775 /u01

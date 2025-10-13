@@ -34,3 +34,20 @@ DEFINE SWG_TEMPFILE_DIR = '/u01/app/oracle/oradata/SWG/temp'
 ```
 
 If `SWG_*FILE_DIR` values are omitted, Oracle's `DB_CREATE_FILE_DEST` is used. Review the generated `swgusr.log` for the full execution trace and restart the database if parameter changes are reported.
+
+## Oracle Instant Client requirements
+
+The automation now targets Oracle Instant Client **21.18** 32-bit RPMs. Before running `oci8.sh`, `oinit.sh`, or `swginit.sh`, make the following packages available:
+
+* `oracle-instantclient-basiclite-21.18.0.0.0-1.i386.rpm`
+* `oracle-instantclient-devel-21.18.0.0.0-1.i386.rpm`
+* `oracle-instantclient-sqlplus-21.18.0.0.0-1.i386.rpm`
+
+Place the RPMs in a directory and set `ORACLE_INSTANTCLIENT_RPM_DIR` before invoking the scripts:
+
+```bash
+export ORACLE_INSTANTCLIENT_RPM_DIR=/path/to/oracle/rpms
+sudo ./oci8.sh
+```
+
+Alternatively, expose a direct download location via `ORACLE_INSTANTCLIENT_BASE_URL`. The scripts cache downloads under `cache/oracle-instantclient/` and reuse them across runs.
