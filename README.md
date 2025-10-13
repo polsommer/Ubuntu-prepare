@@ -1,8 +1,5 @@
-# SWG Prepare
+# SWG Prepare OPENSUSE 16
 
-These are some tools you might be able to use if you want to [build your own SWG Server](https://tekaohswg.github.io/new.html).
-
-> **Note**
 > The helper scripts in this repository now target **openSUSE 16** exclusively.
 
 ## SQL\*Plus bootstrap for the SWG schema
