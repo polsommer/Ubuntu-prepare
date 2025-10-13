@@ -148,6 +148,17 @@ service_files_ready() {
     [[ -f /etc/systemd/system/odb.service ]]
 }
 
+mariadb_packages_ready() {
+    dpkg -s mariadb-server >/dev/null 2>&1 \
+        && dpkg -s libmariadb-dev >/dev/null 2>&1
+}
+
+run_step \
+    "mariadb-packages" \
+    "Install MariaDB server and development libraries" \
+    mariadb_packages_ready \
+    bash -c "apt-get update && apt-get install -y mariadb-server libmariadb-dev"
+
 run_step \
     "oracle-prereqs" \
     "Oracle database prerequisites" \
