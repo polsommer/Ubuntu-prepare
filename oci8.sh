@@ -2,9 +2,24 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=includes/instantclient.sh
-source "$SCRIPT_DIR/includes/instantclient.sh"
+INSTANTCLIENT_MAJOR=21
+INSTANTCLIENT_RELEASE=21.18.0.0.0-1
+INSTANTCLIENT_HOME=""
+INSTANTCLIENT_LIB=""
+INSTANTCLIENT_INCLUDE=""
+INSTANTCLIENT_BIN=""
+INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
+GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
+GDOWN_DIR="gdown.pl-1.4"
+INSTANTCLIENT_COMPONENTS=(
+    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
+    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
+    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX"
+)
+
+if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
+    mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
+fi
 
 ensure_opensuse_16() {
     if [[ -r /etc/os-release ]]; then
@@ -52,6 +67,105 @@ append_unique() {
     fi
 }
 
+download_instantclient_rpms() {
+    local rpm_dir=$INSTANTCLIENT_RPM_DIR
+    mkdir -p "$rpm_dir"
+    pushd "$rpm_dir" >/dev/null
+
+    local entry file url needs_gdown=false
+
+    for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
+        url=${entry#*|}
+        file=${entry%%|*}
+        if [[ ! -f "$file" && "$url" == *"drive.google.com"* ]]; then
+            needs_gdown=true
+            break
+        fi
+    done
+
+    if [[ "$needs_gdown" == true && ! -d "$GDOWN_DIR" ]]; then
+        wget -O v1.4.zip "$GDOWN_ARCHIVE_URL"
+        unzip -o v1.4.zip
+        rm -f v1.4.zip
+    fi
+
+    for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
+        file=${entry%%|*}
+        url=${entry#*|}
+        if [[ -f "$file" ]]; then
+            continue
+        fi
+
+        if [[ "$url" == *"drive.google.com"* ]]; then
+            "./$GDOWN_DIR/gdown.pl" "$url" "$file"
+        else
+            wget -O "$file" "$url"
+        fi
+    done
+
+    if [[ -d "$GDOWN_DIR" ]]; then
+        rm -rf "$GDOWN_DIR"
+    fi
+
+    popd >/dev/null
+}
+
+install_instantclient_rpms() {
+    local rpm_dir=$INSTANTCLIENT_RPM_DIR
+    local entry file path
+    for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
+        file=${entry%%|*}
+        path="$rpm_dir/$file"
+        if [[ ! -f "$path" ]]; then
+            echo "Expected Oracle Instant Client RPM '$path' was not found." >&2
+            exit 1
+        fi
+        zypper --non-interactive install --allow-unsigned-rpm "$path"
+    done
+}
+
+resolve_instantclient_layout() {
+    local home_candidates=(
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
+    )
+    local include_candidates=(
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
+    )
+
+    local candidate
+    for candidate in "${home_candidates[@]}"; do
+        if [[ -d "$candidate" ]]; then
+            INSTANTCLIENT_HOME=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$INSTANTCLIENT_HOME" ]]; then
+        INSTANTCLIENT_HOME=${home_candidates[0]}
+    fi
+
+    INSTANTCLIENT_LIB="${INSTANTCLIENT_HOME}/lib"
+    INSTANTCLIENT_BIN="${INSTANTCLIENT_HOME}/bin"
+
+    if [[ ! -d "$INSTANTCLIENT_HOME" || ! -d "$INSTANTCLIENT_LIB" ]]; then
+        echo "Unable to locate the Oracle Instant Client 21 home under /usr/lib/oracle." >&2
+        exit 1
+    fi
+
+    for candidate in "${include_candidates[@]}"; do
+        if [[ -d "$candidate" ]]; then
+            INSTANTCLIENT_INCLUDE=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$INSTANTCLIENT_INCLUDE" ]]; then
+        INSTANTCLIENT_INCLUDE=${include_candidates[0]}
+    fi
+}
+
 ensure_opensuse_16
 refresh_repos
 
@@ -64,6 +178,7 @@ install_packages \
     libaio1-32bit \
     libnsl1-32bit \
     make \
+    perl \
     php7 \
     php7-cli \
     php7-devel \
@@ -71,8 +186,10 @@ install_packages \
     unzip \
     wget
 
-# Install the Oracle Instant Client RPMs (basiclite/devel/sqlplus)
+# Download and install the Oracle Instant Client RPMs (basiclite/devel/sqlplus)
+download_instantclient_rpms
 install_instantclient_rpms
+resolve_instantclient_layout
 
 # Install PHP OCI8
 echo "instantclient,${INSTANTCLIENT_LIB}" | pecl install oci8
@@ -83,13 +200,15 @@ append_unique "extension=oci8.so" /etc/php7/apache2/php.ini
 
 cat <<EOF >/etc/profile.d/oracle-instantclient.sh
 export ORACLE_HOME=${INSTANTCLIENT_HOME}
-export LD_LIBRARY_PATH=${INSTANTCLIENT_LIB}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${INSTANTCLIENT_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 EOF
 
 cat <<EOF >/etc/apache2/conf.d/oci8.conf
 SetEnv ORACLE_HOME ${INSTANTCLIENT_HOME}
 SetEnv LD_LIBRARY_PATH ${INSTANTCLIENT_LIB}
 EOF
+
+ldconfig
 
 # Restart Apache2
 systemctl restart apache2
