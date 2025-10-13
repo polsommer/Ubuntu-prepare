@@ -179,7 +179,7 @@ append_unique 'export TMP=/tmp;' /home/oracle/.bashrc
 append_unique 'export TMPDIR=$TMP;' /home/oracle/.bashrc
 append_unique 'export ORACLE_HOSTNAME=swg;' /home/oracle/.bashrc
 append_unique 'export ORACLE_BASE=/u01/app/oracle;' /home/oracle/.bashrc
-append_unique 'export ORACLE_HOME=$ORACLE_BASE/product/18/dbhome_1;' /home/oracle/.bashrc
+append_unique 'export ORACLE_HOME=$ORACLE_BASE/product/21/dbhome_1;' /home/oracle/.bashrc
 append_unique 'export ORACLE_SID=swg;' /home/oracle/.bashrc
 append_unique 'export ORACLE_UNQNAME=$ORACLE_SID;' /home/oracle/.bashrc
 append_unique 'export PATH=/usr/sbin:$ORACLE_HOME/bin:$PATH;' /home/oracle/.bashrc
@@ -190,12 +190,12 @@ append_unique 'export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/
 wget https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip
 unzip v1.4.zip
 rm v1.4.zip
-./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=17wfbfZuL90z4Z_FZPHK7l8FecepZ3dyP' 'LINUX.X64_180000_db_home.zip'
+./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=17wfbfZuL90z4Z_FZPHK7l8FecepZ3dyP' 'LINUX.X64_213000_db_home.zip'
 ./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL' 'oracle-instantclient12.2-basiclite-12.2.0.1.0-1.i386.rpm'
 ./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ' 'oracle-instantclient12.2-devel-12.2.0.1.0-1.i386.rpm'
 ./gdown.pl-1.4/gdown.pl 'https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX' 'oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm'
 rm -r gdown.pl-1.4
-mkdir -p /u01/app/oracle/product/18/dbhome_1
-unzip -d /u01/app/oracle/product/18/dbhome_1/ LINUX.X64_180000_db_home.zip
+mkdir -p /u01/app/oracle/product/21/dbhome_1
+unzip -d /u01/app/oracle/product/21/dbhome_1/ LINUX.X64_213000_db_home.zip
 chown -R oracle:oinstall /u01
 chmod -R 775 /u01

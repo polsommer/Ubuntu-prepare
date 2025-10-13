@@ -12,7 +12,7 @@ if [[ "${ID:-}" != "opensuse" && "${ID_LIKE:-}" != *"opensuse"* ]] || [[ "${VERS
     exit 1
 fi
 
-cd /u01/app/oracle/product/18/dbhome_1/lib/stubs
+cd /u01/app/oracle/product/21/dbhome_1/lib/stubs
 rm -f libc.*
-cd /u01/app/oracle/product/18/dbhome_1/bin
+cd /u01/app/oracle/product/21/dbhome_1/bin
 ./relink all
