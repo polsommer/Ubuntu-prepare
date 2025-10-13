@@ -2,19 +2,24 @@
 
 set -euo pipefail
 
-INSTANTCLIENT_VERSION=12.2
-INSTANTCLIENT_HOME=/usr/lib/oracle/${INSTANTCLIENT_VERSION}/client
-INSTANTCLIENT_LIB=${INSTANTCLIENT_HOME}/lib
-INSTANTCLIENT_INCLUDE=/usr/include/oracle/${INSTANTCLIENT_VERSION}/client
-INSTANTCLIENT_BIN=${INSTANTCLIENT_HOME}/bin
+INSTANTCLIENT_MAJOR=21
+INSTANTCLIENT_RELEASE=21.18.0.0.0-1
+INSTANTCLIENT_HOME=""
+INSTANTCLIENT_LIB=""
+INSTANTCLIENT_INCLUDE=""
+INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
 GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
 GDOWN_DIR="gdown.pl-1.4"
 INSTANTCLIENT_COMPONENTS=(
-    "oracle-instantclient12.2-basiclite-12.2.0.1.0-1.i386.rpm|https://drive.google.com/file/d/1q5JuxmYjZTKSFfuh1dWvjnTA107rGuQR"
-    "oracle-instantclient12.2-devel-12.2.0.1.0-1.i386.rpm|https://drive.google.com/file/d/1FGO_hpHJ8-lhqvfTppAV1nCBV1bwcQF5"
-    "oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm|https://drive.google.com/file/d/1kenKU9WK7gS0OLX1wB3LtonKrPUZT8kH"
+    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm"
+    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm"
+    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://download.oracle.com/otn_software/linux/instantclient/211800/oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm"
 )
+
+if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
+    mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
+fi
 
 ensure_opensuse_16() {
     if [[ -r /etc/os-release ]]; then
@@ -99,22 +104,41 @@ download_instantclient_rpms() {
     mkdir -p "$rpm_dir"
     pushd "$rpm_dir" >/dev/null
 
-    if [[ ! -d "$GDOWN_DIR" ]]; then
+    local entry file url needs_gdown=false
+
+    for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
+        url=${entry#*|}
+        file=${entry%%|*}
+        if [[ ! -f "$file" && "$url" == *"drive.google.com"* ]]; then
+            needs_gdown=true
+            break
+        fi
+    done
+
+    if [[ "$needs_gdown" == true && ! -d "$GDOWN_DIR" ]]; then
         wget -O v1.4.zip "$GDOWN_ARCHIVE_URL"
         unzip -o v1.4.zip
         rm -f v1.4.zip
     fi
 
-    local entry file url
     for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
         file=${entry%%|*}
         url=${entry#*|}
-        if [[ ! -f "$file" ]]; then
+        if [[ -f "$file" ]]; then
+            continue
+        fi
+
+        if [[ "$url" == *"drive.google.com"* ]]; then
             "./$GDOWN_DIR/gdown.pl" "$url" "$file"
+        else
+            wget -O "$file" "$url"
         fi
     done
 
-    rm -rf "$GDOWN_DIR"
+    if [[ -d "$GDOWN_DIR" ]]; then
+        rm -rf "$GDOWN_DIR"
+    fi
+
     popd >/dev/null
 }
 
@@ -130,6 +154,48 @@ install_instantclient_rpms() {
         fi
         zypper --non-interactive install --allow-unsigned-rpm "$path"
     done
+}
+
+resolve_instantclient_layout() {
+    local home_candidates=(
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
+    )
+    local include_candidates=(
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
+    )
+
+    local candidate
+    for candidate in "${home_candidates[@]}"; do
+        if [[ -d "$candidate" ]]; then
+            INSTANTCLIENT_HOME=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$INSTANTCLIENT_HOME" ]]; then
+        INSTANTCLIENT_HOME=${home_candidates[0]}
+    fi
+
+    INSTANTCLIENT_LIB="${INSTANTCLIENT_HOME}/lib"
+    INSTANTCLIENT_BIN="${INSTANTCLIENT_HOME}/bin"
+
+    if [[ ! -d "$INSTANTCLIENT_HOME" || ! -d "$INSTANTCLIENT_LIB" ]]; then
+        echo "Unable to locate the Oracle Instant Client 21 home under /usr/lib/oracle." >&2
+        exit 1
+    fi
+
+    for candidate in "${include_candidates[@]}"; do
+        if [[ -d "$candidate" ]]; then
+            INSTANTCLIENT_INCLUDE=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$INSTANTCLIENT_INCLUDE" ]]; then
+        INSTANTCLIENT_INCLUDE=${include_candidates[0]}
+    fi
 }
 
 ensure_opensuse_16
@@ -254,6 +320,7 @@ chown -R oracle:oinstall /u01
 # Acquire and install the Oracle Instant Client dependencies required by tooling
 download_instantclient_rpms
 install_instantclient_rpms
+resolve_instantclient_layout
 
 append_unique "${INSTANTCLIENT_LIB}" /etc/ld.so.conf.d/oracle.conf
 append_unique "export ORACLE_HOME=${INSTANTCLIENT_HOME}" /etc/profile.d/oracle.sh

@@ -37,13 +37,13 @@ If `SWG_*FILE_DIR` values are omitted, Oracle's `DB_CREATE_FILE_DEST` is used. R
 
 ## Oracle Instant Client delivery
 
-`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **12.2.0.1.0** 32-bit RPMs directly from the mirrored Google Drive assets used by the SWG community. The scripts rely on the bundled `gdown.pl` helper to retrieve the following artefacts automatically:
+`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for openSUSE. By default the scripts download the artefacts directly from Oracle:
 
-* `oracle-instantclient12.2-basiclite-12.2.0.1.0-1.i386.rpm`
-* `oracle-instantclient12.2-devel-12.2.0.1.0-1.i386.rpm`
-* `oracle-instantclient12.2-sqlplus-12.2.0.1.0-1.i386.rpm`
+* `oracle-instantclient-basiclite-21.18.0.0.0-1.i386.rpm`
+* `oracle-instantclient-devel-21.18.0.0.0-1.i386.rpm`
+* `oracle-instantclient-sqlplus-21.18.0.0.0-1.i386.rpm`
 
-Downloads are cached under `/tmp/oracle-instantclient` by default. Override the cache location by exporting `INSTANTCLIENT_RPM_DIR` before invoking any helper script:
+If you mirror the RPMs elsewhere (for example on Google Drive), provide a newline-separated list of `filename|url` pairs via the `INSTANTCLIENT_COMPONENTS_OVERRIDE` environment variable and the helper will continue to fetch them—Google Drive URLs automatically trigger the bundled `gdown.pl` workflow. Downloads are cached under `/tmp/oracle-instantclient` by default. Override the cache location by exporting `INSTANTCLIENT_RPM_DIR` before invoking any helper script:
 
 ```bash
 export INSTANTCLIENT_RPM_DIR=/var/cache/oracle
