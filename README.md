@@ -1,6 +1,6 @@
-# SWG Prepare OPENSUSE 16
+# SWG Prepare Ubuntu 24.04 LTS
 
-> The helper scripts in this repository now target **openSUSE 16** exclusively.
+> The helper scripts in this repository now target **Ubuntu 24.04 LTS** exclusively.
 
 ## SQL\*Plus bootstrap for the SWG schema
 
@@ -34,7 +34,7 @@ If `SWG_*FILE_DIR` values are omitted, Oracle's `DB_CREATE_FILE_DEST` is used. R
 
 ## Oracle Instant Client delivery
 
-`install.sh` orchestrates the end-to-end provisioning flow and ties all of the helpers together. Run it as `root` (tested on openSUSE 16) to perform the full installation automatically:
+`install.sh` orchestrates the end-to-end provisioning flow and ties all of the helpers together. Run it as `root` (tested on Ubuntu 24.04 LTS) to perform the full installation automatically:
 
 ```bash
 sudo ./install.sh
@@ -46,7 +46,7 @@ The automation keeps lightweight state under `/var/lib/swg-prepare` to avoid rep
 * `--force` reruns every helper even when the state file indicates completion.
 * `--skip-oci8` and `--skip-service` allow you to omit the PHP OCI8 extension or systemd service deployment respectively.
 
-`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for openSUSE. By default the scripts download the artefacts from the maintained Google Drive mirror (via the bundled `gdown.pl` helper):
+`oci8.sh`, `oinit.sh`, and `swginit.sh` now fetch and install the Oracle Instant Client **21.18.0.0.0** 32-bit RPMs that match the `oracle-instantclient-basiclite`, `-devel`, and `-sqlplus` packages released for Linux. On Ubuntu the scripts transparently convert the RPMs to Debian packages with `alien`. By default the scripts download the artefacts from the maintained Google Drive mirror (via the bundled `gdown.pl` helper):
 
 * `oracle-instantclient-basiclite-21.18.0.0.0-1.i386.rpm`
 * `oracle-instantclient-devel-21.18.0.0.0-1.i386.rpm`

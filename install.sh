@@ -74,6 +74,21 @@ trap 'log "ERROR: installation aborted (line $LINENO)."' ERR
 
 require_root
 
+if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    source /etc/os-release
+fi
+
+if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *"ubuntu"* ]]; then
+    echo "This installer can only be executed on Ubuntu." >&2
+    exit 1
+fi
+
+if [[ ${VERSION_ID:-} != 24.* ]]; then
+    echo "This installer targets Ubuntu 24.04 LTS systems." >&2
+    exit 1
+fi
+
 mkdir -p "$STATE_ROOT"
 
 mark_step() {
