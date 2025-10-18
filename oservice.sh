@@ -7,8 +7,13 @@ if [[ -r /etc/os-release ]]; then
     source /etc/os-release
 fi
 
-if [[ "${ID:-}" != "opensuse" && "${ID_LIKE:-}" != *"opensuse"* ]] || [[ "${VERSION_ID:-}" != "16" ]]; then
-    echo "This script is limited to openSUSE 16 systems." >&2
+if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *"ubuntu"* ]]; then
+    echo "This script can only be executed on Ubuntu." >&2
+    exit 1
+fi
+
+if [[ ${VERSION_ID:-} != 24.* ]]; then
+    echo "This script is limited to Ubuntu 24.04 LTS systems." >&2
     exit 1
 fi
 

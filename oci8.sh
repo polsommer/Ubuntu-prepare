@@ -9,8 +9,6 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
-GDOWN_DIR="gdown.pl-1.4"
 INSTANTCLIENT_COMPONENTS=(
     "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/file/d/1q5JuxmYjZTKSFfuh1dWvjnTA107rGuQR"
     "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/file/d/1FGO_hpHJ8-lhqvfTppAV1nCBV1bwcQF5"
@@ -21,39 +19,39 @@ if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
     mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
 fi
 
-ensure_opensuse_16() {
+export DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
+
+ensure_ubuntu_24() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
         source /etc/os-release
     fi
 
-    if [[ "${ID:-}" != "opensuse" && "${ID_LIKE:-}" != *"opensuse"* ]]; then
-        echo "This script can only be executed on openSUSE." >&2
+    if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *"ubuntu"* ]]; then
+        echo "This script can only be executed on Ubuntu." >&2
         exit 1
     fi
 
-    if [[ "${VERSION_ID:-}" != "16" ]]; then
-        echo "This script is limited to openSUSE 16 systems." >&2
+    if [[ ${VERSION_ID:-} != 24.* ]]; then
+        echo "This script is limited to Ubuntu 24.04 LTS systems." >&2
         exit 1
+    fi
+}
+
+ensure_i386_architecture() {
+    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+        dpkg --add-architecture i386
+        apt-get update
     fi
 }
 
 refresh_repos() {
-    zypper --non-interactive refresh
+    apt-get update
 }
 
 install_packages() {
-    local missing=()
-    local pkg
-    for pkg in "$@"; do
-        if ! zypper --non-interactive install --no-recommends "$pkg"; then
-            missing+=("$pkg")
-        fi
-    done
-
-    if ((${#missing[@]})); then
-        echo "Unable to install required packages: ${missing[*]}" >&2
-        exit 1
+    if (($#)); then
+        apt-get install -y --no-install-recommends "$@"
     fi
 }
 
@@ -83,10 +81,8 @@ download_instantclient_rpms() {
         fi
     done
 
-    if [[ "$needs_gdown" == true && ! -d "$GDOWN_DIR" ]]; then
-        wget -O v1.4.zip "$GDOWN_ARCHIVE_URL"
-        unzip -o v1.4.zip
-        rm -f v1.4.zip
+    if [[ "$needs_gdown" == true ]]; then
+        ensure_gdown
     fi
 
     for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
@@ -97,17 +93,25 @@ download_instantclient_rpms() {
         fi
 
         if [[ "$url" == *"drive.google.com"* ]]; then
-            "./$GDOWN_DIR/gdown.pl" "$url" "$file"
+            gdown --fuzzy --output "$file" "$url"
         else
             wget -O "$file" "$url"
         fi
     done
 
-    if [[ -d "$GDOWN_DIR" ]]; then
-        rm -rf "$GDOWN_DIR"
+    popd >/dev/null
+}
+
+ensure_gdown() {
+    if command -v gdown >/dev/null 2>&1; then
+        return
     fi
 
-    popd >/dev/null
+    install_packages python3 python3-pip
+
+    if ! python3 -m pip show gdown >/dev/null 2>&1; then
+        python3 -m pip install --break-system-packages gdown
+    fi
 }
 
 install_instantclient_rpms() {
@@ -120,7 +124,12 @@ install_instantclient_rpms() {
             echo "Expected Oracle Instant Client RPM '$path' was not found." >&2
             exit 1
         fi
-        zypper --non-interactive install --allow-unsigned-rpm "$path"
+        if ! command -v alien >/dev/null 2>&1; then
+            echo "The 'alien' utility is required to install Oracle Instant Client RPMs on Ubuntu." >&2
+            echo "Install it with: sudo apt-get install -y alien" >&2
+            exit 1
+        fi
+        alien --scripts -i "$path"
     done
 }
 
@@ -166,25 +175,32 @@ resolve_instantclient_layout() {
     fi
 }
 
-ensure_opensuse_16
+ensure_ubuntu_24
+ensure_i386_architecture
 refresh_repos
 
 install_packages \
+    alien \
     apache2 \
-    apache2-mod_php7 \
+    libapache2-mod-php \
+    build-essential \
     gcc \
-    gcc-c++ \
+    g++ \
     libaio1 \
-    libaio1-32bit \
-    libnsl1-32bit \
+    libaio1:i386 \
+    libnsl2 \
+    libnsl2:i386 \
     make \
     perl \
-    php7 \
-    php7-cli \
-    php7-devel \
-    php7-pear \
+    php \
+    php-cli \
+    php-dev \
+    php-pear \
+    php-xml \
+    php-mbstring \
     unzip \
-    wget
+    wget \
+    pkg-config
 
 # Download and install the Oracle Instant Client RPMs (basiclite/devel/sqlplus)
 download_instantclient_rpms
@@ -192,23 +208,38 @@ install_instantclient_rpms
 resolve_instantclient_layout
 
 # Install PHP OCI8
-echo "instantclient,${INSTANTCLIENT_LIB}" | pecl install oci8
+printf 'instantclient,%s\n' "${INSTANTCLIENT_LIB}" | pecl install -f oci8
 
-# Add some config to PHP and Apache2
-append_unique "extension=oci8.so" /etc/php7/cli/php.ini
-append_unique "extension=oci8.so" /etc/php7/apache2/php.ini
+php_version=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+php_cli_ini="/etc/php/${php_version}/cli/php.ini"
+php_apache_ini="/etc/php/${php_version}/apache2/php.ini"
+
+if [[ -z "$php_version" || ! -f "$php_cli_ini" || ! -f "$php_apache_ini" ]]; then
+    echo "Unable to locate PHP configuration for version '${php_version}'." >&2
+    exit 1
+fi
+
+# Ensure PHP loads the OCI8 extension
+append_unique "extension=oci8.so" "$php_cli_ini"
+append_unique "extension=oci8.so" "$php_apache_ini"
+
+# Enable the Apache PHP module and expose Oracle environment variables
+a2enmod "php${php_version}"
 
 cat <<EOF >/etc/profile.d/oracle-instantclient.sh
 export ORACLE_HOME=${INSTANTCLIENT_HOME}
 export LD_LIBRARY_PATH=${INSTANTCLIENT_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+export PATH=${INSTANTCLIENT_BIN}:\$PATH
 EOF
 
-cat <<EOF >/etc/apache2/conf.d/oci8.conf
+cat <<EOF >/etc/apache2/conf-available/oci8.conf
 SetEnv ORACLE_HOME ${INSTANTCLIENT_HOME}
 SetEnv LD_LIBRARY_PATH ${INSTANTCLIENT_LIB}
 EOF
 
+a2enconf oci8
+
 ldconfig
 
-# Restart Apache2
+# Restart Apache2 to pick up the new configuration and extension
 systemctl restart apache2

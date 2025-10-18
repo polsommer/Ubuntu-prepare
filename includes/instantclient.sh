@@ -86,17 +86,34 @@ resolve_instantclient_rpm_dir() {
     printf '%s\n' "$rpm_dir"
 }
 
+ensure_alien_available() {
+    if ! command -v alien >/dev/null 2>&1; then
+        echo "The 'alien' utility is required to install Oracle Instant Client RPMs on Ubuntu." >&2
+        echo "Install it with: sudo apt-get install -y alien" >&2
+        exit 1
+    fi
+}
+
 install_instantclient_rpms() {
     local rpm_dir
     rpm_dir=$(resolve_instantclient_rpm_dir)
-    local package
+    local package base_name rpm_path
+
+    ensure_alien_available
 
     for package in "${INSTANTCLIENT_PACKAGES[@]}"; do
-        local rpm_path="$rpm_dir/$package"
+        rpm_path="$rpm_dir/$package"
         if [[ ! -f "$rpm_path" ]]; then
             echo "Expected RPM '$rpm_path' was not found." >&2
             exit 1
         fi
-        zypper --non-interactive install --allow-unsigned-rpm "$rpm_path"
+
+        base_name=${package%%-${INSTANTCLIENT_RELEASE}*}
+        if ! dpkg-query -W -f='${Status}' "$base_name" >/dev/null 2>&1; then
+            alien --scripts -i "$rpm_path"
+        else
+            # Reinstall silently to ensure the desired version is present.
+            alien --scripts -i "$rpm_path"
+        fi
     done
 }

@@ -9,8 +9,6 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
-GDOWN_DIR="gdown.pl-1.4"
 INSTANTCLIENT_COMPONENTS=(
     "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
     "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
@@ -21,47 +19,48 @@ if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
     mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
 fi
 
-ensure_opensuse_16() {
+export DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
+
+ensure_ubuntu_24() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
         source /etc/os-release
     fi
 
-    if [[ "${ID:-}" != "opensuse" && "${ID_LIKE:-}" != *"opensuse"* ]]; then
-        echo "This script can only be executed on openSUSE." >&2
+    if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *"ubuntu"* ]]; then
+        echo "This script can only be executed on Ubuntu." >&2
         exit 1
     fi
 
-    if [[ "${VERSION_ID:-}" != "16" ]]; then
-        echo "This script is limited to openSUSE 16 systems." >&2
+    if [[ ${VERSION_ID:-} != 24.* ]]; then
+        echo "This script is limited to Ubuntu 24.04 LTS systems." >&2
         exit 1
+    fi
+}
+
+ensure_i386_architecture() {
+    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+        dpkg --add-architecture i386
+        apt-get update
     fi
 }
 
 refresh_repos() {
-    zypper --non-interactive refresh
+    apt-get update
 }
 
 install_packages() {
-    local missing=()
-    local pkg
-    for pkg in "$@"; do
-        if ! zypper --non-interactive install --no-recommends "$pkg"; then
-            missing+=("$pkg")
-        fi
-    done
-
-    if ((${#missing[@]})); then
-        echo "Unable to install required packages: ${missing[*]}" >&2
-        exit 1
+    if (($#)); then
+        apt-get install -y --no-install-recommends "$@"
     fi
 }
 
 install_optional_packages() {
     local pkg
     for pkg in "$@"; do
-        zypper --non-interactive install --no-recommends "$pkg" || \
+        if ! apt-get install -y --no-install-recommends "$pkg"; then
             echo "Optional package '$pkg' could not be installed; continuing." >&2
+        fi
     done
 }
 
@@ -115,10 +114,8 @@ download_instantclient_rpms() {
         fi
     done
 
-    if [[ "$needs_gdown" == true && ! -d "$GDOWN_DIR" ]]; then
-        wget -O v1.4.zip "$GDOWN_ARCHIVE_URL"
-        unzip -o v1.4.zip
-        rm -f v1.4.zip
+    if [[ "$needs_gdown" == true ]]; then
+        ensure_gdown
     fi
 
     for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
@@ -129,17 +126,25 @@ download_instantclient_rpms() {
         fi
 
         if [[ "$url" == *"drive.google.com"* ]]; then
-            "./$GDOWN_DIR/gdown.pl" "$url" "$file"
+            gdown --fuzzy --output "$file" "$url"
         else
             wget -O "$file" "$url"
         fi
     done
 
-    if [[ -d "$GDOWN_DIR" ]]; then
-        rm -rf "$GDOWN_DIR"
+    popd >/dev/null
+}
+
+ensure_gdown() {
+    if command -v gdown >/dev/null 2>&1; then
+        return
     fi
 
-    popd >/dev/null
+    install_packages python3 python3-pip
+
+    if ! python3 -m pip show gdown >/dev/null 2>&1; then
+        python3 -m pip install --break-system-packages gdown
+    fi
 }
 
 install_instantclient_rpms() {
@@ -152,7 +157,12 @@ install_instantclient_rpms() {
             echo "Expected Oracle Instant Client RPM '$path' was not found." >&2
             exit 1
         fi
-        zypper --non-interactive install --allow-unsigned-rpm "$path"
+        if ! command -v alien >/dev/null 2>&1; then
+            echo "The 'alien' utility is required to install Oracle Instant Client RPMs on Ubuntu." >&2
+            echo "Install it with: sudo apt-get install -y alien" >&2
+            exit 1
+        fi
+        alien --scripts -i "$path"
     done
 }
 
@@ -198,57 +208,75 @@ resolve_instantclient_layout() {
     fi
 }
 
-ensure_opensuse_16
+ensure_ubuntu_24
+ensure_i386_architecture
 refresh_repos
 
-zypper --non-interactive install --type pattern devel_basis
-
 install_packages \
+    build-essential \
     alien \
     autoconf \
     automake \
     binutils \
     bzip2 \
     elfutils \
-    expat \
     gawk \
     gcc \
-    gcc-c++ \
-    gcc-32bit \
-    glibc \
-    glibc-devel \
-    glibc-32bit \
-    glibc-devel-32bit \
+    g++ \
+    gcc-multilib \
+    libc6 \
+    libc6-dev \
+    libc6:i386 \
+    libc6-dev:i386 \
+    libstdc++6 \
+    libstdc++6:i386 \
+    libgcc-s1 \
+    libgcc-s1:i386 \
+    libexpat1 \
+    libexpat1-dev \
     ksh \
     less \
-    libaio-devel \
+    libaio-dev \
     libaio1 \
-    libaio1-32bit \
-    libnsl1-32bit \
-    libelf-devel \
+    libaio1:i386 \
+    libnsl-dev \
+    libnsl2 \
+    libnsl2:i386 \
+    libelf-dev \
     libltdl7 \
-    motif-devel \
+    libmotif-dev \
     perl \
     rlwrap \
     rpm \
     sysstat \
-    unixODBC \
-    unixODBC-devel \
+    unixodbc \
+    unixodbc-dev \
     unzip \
     wget \
     zenity \
-    zlib-devel \
-    zlib-devel-32bit
+    zlib1g-dev \
+    zlib1g:i386 \
+    pkg-config \
+    libx11-6 \
+    libx11-6:i386 \
+    libxext6 \
+    libxext6:i386 \
+    libxft2 \
+    libxft2:i386 \
+    libxi6 \
+    libxi6:i386 \
+    libxtst6 \
+    libxtst6:i386 \
+    libxt6 \
+    libxt6:i386
 
 install_optional_packages \
     libmrm4 \
-    libmrm4-32bit \
-    libstdc++5 \
-    libstdc++6-32bit \
+    libmrm4:i386 \
     libuil4 \
-    libuil4-32bit \
-    libXm4 \
-    libXm4-32bit
+    libuil4:i386 \
+    libxm4 \
+    libxm4:i386
 
 # Setup groups and an oracle user
 create_group oinstall
@@ -282,16 +310,14 @@ append_unique 'oracle       soft  nofile 1024' /etc/security/limits.conf
 append_unique 'oracle       hard  nofile 65536' /etc/security/limits.conf
 append_unique 'oracle       soft  stack  10240' /etc/security/limits.conf
 
-/sbin/sysctl -p
+sysctl -p
 
 # Set symlinks
 create_symlink_if_missing /usr/bin/awk /bin/awk
 create_symlink_if_missing /usr/bin/rpm /bin/rpm
 create_symlink_if_missing /usr/bin/basename /bin/basename
-create_symlink_if_missing /usr/lib64 /usr/lib/x86_64-linux-gnu
-create_symlink_if_missing /lib64 /lib/x86_64-linux-gnu
-create_symlink_if_missing /lib64/libgcc_s.so.1 /lib/libgcc_s.so.1
-create_symlink_if_missing /lib64/libgcc_s.so.1 /lib/libgcc_s.so
+create_symlink_if_missing /usr/lib/x86_64-linux-gnu /usr/lib64
+create_symlink_if_missing /lib/x86_64-linux-gnu /lib64
 ln -sf /bin/bash /bin/sh
 
 # Set Paths in Oracle bashrc
@@ -304,7 +330,7 @@ append_unique 'export ORACLE_HOME=$ORACLE_BASE/product/21/dbhome_1;' /home/oracl
 append_unique 'export ORACLE_SID=swg;' /home/oracle/.bashrc
 append_unique 'export ORACLE_UNQNAME=$ORACLE_SID;' /home/oracle/.bashrc
 append_unique 'export PATH=/usr/sbin:$ORACLE_HOME/bin:$PATH;' /home/oracle/.bashrc
-append_unique 'export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib:/usr/lib64;' /home/oracle/.bashrc
+append_unique 'export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/i386-linux-gnu;' /home/oracle/.bashrc
 append_unique 'export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib;' /home/oracle/.bashrc
 
 # let's download and unpack the binary

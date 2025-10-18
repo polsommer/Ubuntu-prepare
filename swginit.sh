@@ -9,8 +9,6 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-GDOWN_ARCHIVE_URL="https://github.com/tekaohswg/gdown.pl/archive/v1.4.zip"
-GDOWN_DIR="gdown.pl-1.4"
 INSTANTCLIENT_COMPONENTS=(
     "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
     "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
@@ -26,47 +24,48 @@ AZUL_ZULU_JDK_URL=${AZUL_ZULU_JDK_URL:-https://cdn.azul.com/zulu/bin/${AZUL_ZULU
 AZUL_ZULU_CACHE_DIR=${AZUL_ZULU_CACHE_DIR:-/tmp/azul-zulu}
 AZUL_ZULU_INSTALL_ROOT=${AZUL_ZULU_INSTALL_ROOT:-/opt/zulu}
 
-ensure_opensuse_16() {
+export DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
+
+ensure_ubuntu_24() {
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
         source /etc/os-release
     fi
 
-    if [[ "${ID:-}" != "opensuse" && "${ID_LIKE:-}" != *"opensuse"* ]]; then
-        echo "This script can only be executed on openSUSE." >&2
+    if [[ "${ID:-}" != "ubuntu" && "${ID_LIKE:-}" != *"ubuntu"* ]]; then
+        echo "This script can only be executed on Ubuntu." >&2
         exit 1
     fi
 
-    if [[ "${VERSION_ID:-}" != "16" ]]; then
-        echo "This script is limited to openSUSE 16 systems." >&2
+    if [[ ${VERSION_ID:-} != 24.* ]]; then
+        echo "This script is limited to Ubuntu 24.04 LTS systems." >&2
         exit 1
+    fi
+}
+
+ensure_i386_architecture() {
+    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+        dpkg --add-architecture i386
+        apt-get update
     fi
 }
 
 refresh_repos() {
-    zypper --non-interactive refresh
+    apt-get update
 }
 
 install_packages() {
-    local missing=()
-    local pkg
-    for pkg in "$@"; do
-        if ! zypper --non-interactive install --no-recommends "$pkg"; then
-            missing+=("$pkg")
-        fi
-    done
-
-    if ((${#missing[@]})); then
-        echo "Unable to install required packages: ${missing[*]}" >&2
-        exit 1
+    if (($#)); then
+        apt-get install -y --no-install-recommends "$@"
     fi
 }
 
 install_optional_packages() {
     local pkg
     for pkg in "$@"; do
-        zypper --non-interactive install --no-recommends "$pkg" || \
+        if ! apt-get install -y --no-install-recommends "$pkg"; then
             echo "Optional package '$pkg' could not be installed; continuing." >&2
+        fi
     done
 }
 
@@ -96,10 +95,8 @@ download_instantclient_rpms() {
         fi
     done
 
-    if [[ "$needs_gdown" == true && ! -d "$GDOWN_DIR" ]]; then
-        wget -O v1.4.zip "$GDOWN_ARCHIVE_URL"
-        unzip -o v1.4.zip
-        rm -f v1.4.zip
+    if [[ "$needs_gdown" == true ]]; then
+        ensure_gdown
     fi
 
     for entry in "${INSTANTCLIENT_COMPONENTS[@]}"; do
@@ -110,17 +107,25 @@ download_instantclient_rpms() {
         fi
 
         if [[ "$url" == *"drive.google.com"* ]]; then
-            "./$GDOWN_DIR/gdown.pl" "$url" "$file"
+            gdown --fuzzy --output "$file" "$url"
         else
             wget -O "$file" "$url"
         fi
     done
 
-    if [[ -d "$GDOWN_DIR" ]]; then
-        rm -rf "$GDOWN_DIR"
+    popd >/dev/null
+}
+
+ensure_gdown() {
+    if command -v gdown >/dev/null 2>&1; then
+        return
     fi
 
-    popd >/dev/null
+    install_packages python3 python3-pip
+
+    if ! python3 -m pip show gdown >/dev/null 2>&1; then
+        python3 -m pip install --break-system-packages gdown
+    fi
 }
 
 install_instantclient_rpms() {
@@ -133,7 +138,12 @@ install_instantclient_rpms() {
             echo "Expected Oracle Instant Client RPM '$path' was not found." >&2
             exit 1
         fi
-        zypper --non-interactive install --allow-unsigned-rpm "$path"
+        if ! command -v alien >/dev/null 2>&1; then
+            echo "The 'alien' utility is required to install Oracle Instant Client RPMs on Ubuntu." >&2
+            echo "Install it with: sudo apt-get install -y alien" >&2
+            exit 1
+        fi
+        alien --scripts -i "$path"
     done
 }
 
@@ -188,7 +198,7 @@ install_azul_zulu_jdk() {
 
     mkdir -p "$cache_dir"
     if [[ ! -f "$tarball_path" ]]; then
-        echo -e "\n💡 Installing 32-bit Azul Zulu JDK 17 on openSUSE...\n"
+        echo -e "\n💡 Installing 32-bit Azul Zulu JDK 17 on Ubuntu...\n"
         wget -O "$tarball_path" "$tarball_url"
     fi
 
@@ -220,49 +230,55 @@ install_azul_zulu_jdk() {
     append_unique 'export PATH=$JAVA_HOME/bin:$PATH' /etc/profile.d/java.sh
 }
 
-ensure_opensuse_16
+ensure_ubuntu_24
+ensure_i386_architecture
 refresh_repos
 
-zypper --non-interactive install --type pattern devel_basis
-
 install_packages \
+    alien \
     ant \
     bc \
     bison \
+    build-essential \
     clang \
     cmake \
     flex \
     gcc \
-    gcc-c++ \
-    gcc-32bit \
+    g++ \
+    gcc-multilib \
     git \
     libaio1 \
-    libaio1-32bit \
-    libnsl1-32bit \
+    libaio1:i386 \
+    libnsl2 \
+    libnsl2:i386 \
     libcurl4 \
-    libcurl4-32bit \
-    libgcc_s1-32bit \
+    libcurl4:i386 \
+    libgcc-s1 \
+    libgcc-s1:i386 \
+    libstdc++6 \
+    libstdc++6:i386 \
     libncurses5 \
-    libncurses5-32bit \
-    libpcre1 \
-    libpcre1-32bit \
+    libncurses5:i386 \
+    libpcre3 \
+    libpcre3:i386 \
     libsqlite3-0 \
-    libsqlite3-0-32bit \
-    libxml2-2 \
-    libxml2-2-32bit \
-    linux-glibc-devel \
+    libsqlite3-0:i386 \
+    libxml2 \
+    libxml2:i386 \
+    linux-libc-dev \
     perl \
     psmisc \
     python3-ply \
     sqlite3 \
     tar \
-    zlib-devel \
-    zlib-devel-32bit
+    zlib1g-dev \
+    zlib1g:i386 \
+    pkg-config
 
 install_optional_packages \
-    boost-devel \
-    libboost_program_options1_82_0 \
-    libboost_program_options1_82_0-32bit
+    libboost-program-options-dev \
+    libboost-program-options1.83.0 \
+    libboost-program-options1.83.0:i386
 
 # Acquire and install the Oracle Instant Client components required by SWG tooling
 download_instantclient_rpms
