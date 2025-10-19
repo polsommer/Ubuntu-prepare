@@ -9,17 +9,80 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-INSTANTCLIENT_COMPONENTS=(
-    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
-    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
-    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX"
-)
+DEFAULT_INSTANTCLIENT_BASE_URL="https://download.oracle.com/otn_software/linux/instantclient/2118000"
+
+detect_default_instantclient_arch() {
+    local dpkg_arch=""
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+    fi
+
+    case "$dpkg_arch" in
+        amd64|x86_64)
+            printf 'x86_64\n'
+            ;;
+        i386|i686)
+            printf 'i386\n'
+            ;;
+        arm64|aarch64)
+            printf 'aarch64\n'
+            ;;
+        *)
+            printf 'x86_64\n'
+            ;;
+    esac
+}
+
+map_instantclient_to_azul_suffix() {
+    local arch=$1
+    case "$arch" in
+        i386)
+            printf 'i686\n'
+            ;;
+        aarch64)
+            printf 'aarch64\n'
+            ;;
+        *)
+            printf 'x64\n'
+            ;;
+    esac
+}
+
+describe_azul_arch() {
+    local suffix=$1
+    case "$suffix" in
+        i686)
+            printf '32-bit (linux_i686)\n'
+            ;;
+        x64)
+            printf '64-bit (linux_x64)\n'
+            ;;
+        aarch64)
+            printf 'ARM64 (linux_aarch64)\n'
+            ;;
+        *)
+            printf 'linux_%s\n' "$suffix"
+            ;;
+    esac
+}
+
+INSTANTCLIENT_ARCH=${INSTANTCLIENT_ARCH:-$(detect_default_instantclient_arch)}
+INSTANTCLIENT_BASE_URL=${INSTANTCLIENT_BASE_URL:-$DEFAULT_INSTANTCLIENT_BASE_URL}
+AZUL_ZULU_SUFFIX=${AZUL_ZULU_SUFFIX:-$(map_instantclient_to_azul_suffix "$INSTANTCLIENT_ARCH")}
+
+INSTANTCLIENT_COMPONENTS=()
 
 if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
     mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
+else
+    INSTANTCLIENT_COMPONENTS=(
+        "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+    )
 fi
 
-AZUL_ZULU_JDK_TARBALL=${AZUL_ZULU_JDK_TARBALL:-zulu17.46.19-ca-jdk17.0.10-linux_i686.tar.gz}
+AZUL_ZULU_JDK_TARBALL=${AZUL_ZULU_JDK_TARBALL:-zulu17.46.19-ca-jdk17.0.10-linux_${AZUL_ZULU_SUFFIX}.tar.gz}
 AZUL_ZULU_JDK_URL=${AZUL_ZULU_JDK_URL:-https://cdn.azul.com/zulu/bin/${AZUL_ZULU_JDK_TARBALL}}
 AZUL_ZULU_CACHE_DIR=${AZUL_ZULU_CACHE_DIR:-/tmp/azul-zulu}
 AZUL_ZULU_INSTALL_ROOT=${AZUL_ZULU_INSTALL_ROOT:-/opt/zulu}
@@ -43,10 +106,12 @@ ensure_ubuntu_24() {
     fi
 }
 
-ensure_i386_architecture() {
-    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
-        dpkg --add-architecture i386
-        apt-get update
+ensure_required_architecture() {
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+            dpkg --add-architecture i386
+            apt-get update
+        fi
     fi
 }
 
@@ -149,13 +214,28 @@ install_instantclient_rpms() {
 
 resolve_instantclient_layout() {
     local home_candidates=(
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
     local include_candidates=(
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
+
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        home_candidates=(
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+        include_candidates=(
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+    fi
 
     local candidate
     for candidate in "${home_candidates[@]}"; do
@@ -198,7 +278,9 @@ install_azul_zulu_jdk() {
 
     mkdir -p "$cache_dir"
     if [[ ! -f "$tarball_path" ]]; then
-        echo -e "\n💡 Installing 32-bit Azul Zulu JDK 17 on Ubuntu...\n"
+        local arch_description
+        arch_description=$(describe_azul_arch "$AZUL_ZULU_SUFFIX")
+        echo -e "\n💡 Installing Azul Zulu JDK 17 ${arch_description} on Ubuntu...\n"
         wget -O "$tarball_path" "$tarball_url"
     fi
 
@@ -231,61 +313,77 @@ install_azul_zulu_jdk() {
 }
 
 ensure_ubuntu_24
-ensure_i386_architecture
+ensure_required_architecture
 refresh_repos
 
-install_packages \
-    alien \
-    ant \
-    bc \
-    bison \
-    build-essential \
-    clang \
-    cmake \
-    flex \
-    gcc \
-    g++ \
-    gcc-multilib \
-    git \
-    libaio1 \
-    libaio1:i386 \
-    libnsl2 \
-    libnsl2:i386 \
-    libcurl4 \
-    libcurl4:i386 \
-    libgcc-s1 \
-    libgcc-s1:i386 \
-    libstdc++6 \
-    libstdc++6:i386 \
-    libncurses5 \
-    libncurses5:i386 \
-    libpcre3 \
-    libpcre3:i386 \
-    libsqlite3-0 \
-    libsqlite3-0:i386 \
-    libxml2 \
-    libxml2:i386 \
-    linux-libc-dev \
-    perl \
-    psmisc \
-    python3-ply \
-    sqlite3 \
-    tar \
-    zlib1g-dev \
-    zlib1g:i386 \
+packages=(
+    alien
+    ant
+    bc
+    bison
+    build-essential
+    clang
+    cmake
+    flex
+    gcc
+    g++
+    gcc-multilib
+    git
+    libaio1
+    libnsl2
+    libcurl4
+    libgcc-s1
+    libstdc++6
+    libncurses5
+    libpcre3
+    libsqlite3-0
+    libxml2
+    linux-libc-dev
+    perl
+    psmisc
+    python3-ply
+    sqlite3
+    tar
+    zlib1g-dev
     pkg-config
+)
 
-install_optional_packages \
-    libboost-program-options-dev \
-    libboost-program-options1.83.0 \
-    libboost-program-options1.83.0:i386
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    packages+=(
+        libaio1:i386
+        libnsl2:i386
+        libcurl4:i386
+        libgcc-s1:i386
+        libstdc++6:i386
+        libncurses5:i386
+        libpcre3:i386
+        libsqlite3-0:i386
+        libxml2:i386
+        zlib1g:i386
+    )
+fi
+
+install_packages "${packages[@]}"
+
+optional_packages=(
+    libboost-program-options-dev
+    libboost-program-options1.83.0
+)
+
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    optional_packages+=(
+        libboost-program-options1.83.0:i386
+    )
+fi
+
+install_optional_packages "${optional_packages[@]}"
 
 # Acquire and install the Oracle Instant Client components required by SWG tooling
 download_instantclient_rpms
 install_instantclient_rpms
 resolve_instantclient_layout
 
-# Install and expose a 32-bit Azul Zulu JDK 17 runtime for the SWG tooling stack
+# Install and expose the Azul Zulu JDK 17 runtime for the SWG tooling stack
 install_azul_zulu_jdk
 
 # set env vars
