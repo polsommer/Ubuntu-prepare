@@ -4,11 +4,53 @@ set -euo pipefail
 
 INSTANTCLIENT_MAJOR=${INSTANTCLIENT_MAJOR:-21}
 INSTANTCLIENT_RELEASE=${INSTANTCLIENT_RELEASE:-21.18.0.0.0-1}
-INSTANTCLIENT_ARCH=${INSTANTCLIENT_ARCH:-i386}
-INSTANTCLIENT_HOME=${INSTANTCLIENT_HOME:-/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32}
+
+detect_default_instantclient_arch() {
+    local dpkg_arch=""
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+    fi
+
+    case "$dpkg_arch" in
+        amd64|x86_64)
+            printf 'x86_64\n'
+            ;;
+        i386|i686)
+            printf 'i386\n'
+            ;;
+        arm64|aarch64)
+            printf 'aarch64\n'
+            ;;
+        *)
+            printf 'x86_64\n'
+            ;;
+    esac
+}
+
+INSTANTCLIENT_ARCH=${INSTANTCLIENT_ARCH:-$(detect_default_instantclient_arch)}
+
+if [[ -z "${ORACLE_INSTANTCLIENT_BASE_URL:-}" ]]; then
+    ORACLE_INSTANTCLIENT_BASE_URL="https://download.oracle.com/otn_software/linux/instantclient/2118000"
+fi
+
+if [[ -z "${INSTANTCLIENT_HOME:-}" ]]; then
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        INSTANTCLIENT_HOME="/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+    else
+        INSTANTCLIENT_HOME="/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
+    fi
+fi
+
 INSTANTCLIENT_LIB=${INSTANTCLIENT_LIB:-${INSTANTCLIENT_HOME}/lib}
 INSTANTCLIENT_BIN=${INSTANTCLIENT_BIN:-${INSTANTCLIENT_HOME}/bin}
-INSTANTCLIENT_INCLUDE=${INSTANTCLIENT_INCLUDE:-/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32}
+
+if [[ -z "${INSTANTCLIENT_INCLUDE:-}" ]]; then
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        INSTANTCLIENT_INCLUDE="/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+    else
+        INSTANTCLIENT_INCLUDE="/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
+    fi
+fi
 
 # Packages are expected to match the naming convention distributed by Oracle
 # (for example oracle-instantclient-basiclite-21.18.0.0.0-1.i386.rpm).

@@ -9,14 +9,43 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-INSTANTCLIENT_COMPONENTS=(
-    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/file/d/1q5JuxmYjZTKSFfuh1dWvjnTA107rGuQR"
-    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/file/d/1FGO_hpHJ8-lhqvfTppAV1nCBV1bwcQF5"
-    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/file/d/1kenKU9WK7gS0OLX1wB3LtonKrPUZT8kH"
-)
+DEFAULT_INSTANTCLIENT_BASE_URL="https://download.oracle.com/otn_software/linux/instantclient/2118000"
+
+detect_default_instantclient_arch() {
+    local dpkg_arch=""
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+    fi
+
+    case "$dpkg_arch" in
+        amd64|x86_64)
+            printf 'x86_64\n'
+            ;;
+        i386|i686)
+            printf 'i386\n'
+            ;;
+        arm64|aarch64)
+            printf 'aarch64\n'
+            ;;
+        *)
+            printf 'x86_64\n'
+            ;;
+    esac
+}
+
+INSTANTCLIENT_ARCH=${INSTANTCLIENT_ARCH:-$(detect_default_instantclient_arch)}
+INSTANTCLIENT_BASE_URL=${INSTANTCLIENT_BASE_URL:-$DEFAULT_INSTANTCLIENT_BASE_URL}
+
+INSTANTCLIENT_COMPONENTS=()
 
 if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
     mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
+else
+    INSTANTCLIENT_COMPONENTS=(
+        "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+    )
 fi
 
 export DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
@@ -38,10 +67,12 @@ ensure_ubuntu_24() {
     fi
 }
 
-ensure_i386_architecture() {
-    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
-        dpkg --add-architecture i386
-        apt-get update
+ensure_required_architecture() {
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+            dpkg --add-architecture i386
+            apt-get update
+        fi
     fi
 }
 
@@ -135,13 +166,28 @@ install_instantclient_rpms() {
 
 resolve_instantclient_layout() {
     local home_candidates=(
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
     local include_candidates=(
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
+
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        home_candidates=(
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+        include_candidates=(
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+    fi
 
     local candidate
     for candidate in "${home_candidates[@]}"; do
@@ -176,31 +222,39 @@ resolve_instantclient_layout() {
 }
 
 ensure_ubuntu_24
-ensure_i386_architecture
+ensure_required_architecture
 refresh_repos
 
-install_packages \
-    alien \
-    apache2 \
-    libapache2-mod-php \
-    build-essential \
-    gcc \
-    g++ \
-    libaio1 \
-    libaio1:i386 \
-    libnsl2 \
-    libnsl2:i386 \
-    make \
-    perl \
-    php \
-    php-cli \
-    php-dev \
-    php-pear \
-    php-xml \
-    php-mbstring \
-    unzip \
-    wget \
+packages=(
+    alien
+    apache2
+    libapache2-mod-php
+    build-essential
+    gcc
+    g++
+    libaio1
+    libnsl2
+    make
+    perl
+    php
+    php-cli
+    php-dev
+    php-pear
+    php-xml
+    php-mbstring
+    unzip
+    wget
     pkg-config
+)
+
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    packages+=(
+        libaio1:i386
+        libnsl2:i386
+    )
+fi
+
+install_packages "${packages[@]}"
 
 # Download and install the Oracle Instant Client RPMs (basiclite/devel/sqlplus)
 download_instantclient_rpms

@@ -9,14 +9,43 @@ INSTANTCLIENT_LIB=""
 INSTANTCLIENT_INCLUDE=""
 INSTANTCLIENT_BIN=""
 INSTANTCLIENT_RPM_DIR=${INSTANTCLIENT_RPM_DIR:-/tmp/oracle-instantclient}
-INSTANTCLIENT_COMPONENTS=(
-    "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1xb0S2cYAmXZurIkzuUuVOPDw-CcjDioL"
-    "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=15s_e_Z4BMxpAqsIUFwyO1tbM9SS1XFVZ"
-    "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.i386.rpm|https://drive.google.com/open?id=1FUVe89ZObP_LQN63xD1kQEpBgTmV3wbX"
-)
+DEFAULT_INSTANTCLIENT_BASE_URL="https://download.oracle.com/otn_software/linux/instantclient/2118000"
+
+detect_default_instantclient_arch() {
+    local dpkg_arch=""
+    if command -v dpkg >/dev/null 2>&1; then
+        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+    fi
+
+    case "$dpkg_arch" in
+        amd64|x86_64)
+            printf 'x86_64\n'
+            ;;
+        i386|i686)
+            printf 'i386\n'
+            ;;
+        arm64|aarch64)
+            printf 'aarch64\n'
+            ;;
+        *)
+            printf 'x86_64\n'
+            ;;
+    esac
+}
+
+INSTANTCLIENT_ARCH=${INSTANTCLIENT_ARCH:-$(detect_default_instantclient_arch)}
+INSTANTCLIENT_BASE_URL=${INSTANTCLIENT_BASE_URL:-$DEFAULT_INSTANTCLIENT_BASE_URL}
+
+INSTANTCLIENT_COMPONENTS=()
 
 if [[ -n "${INSTANTCLIENT_COMPONENTS_OVERRIDE:-}" ]]; then
     mapfile -t INSTANTCLIENT_COMPONENTS <<<"${INSTANTCLIENT_COMPONENTS_OVERRIDE}"
+else
+    INSTANTCLIENT_COMPONENTS=(
+        "oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-basiclite-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-devel-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+        "oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm|${INSTANTCLIENT_BASE_URL%/}/oracle-instantclient-sqlplus-${INSTANTCLIENT_RELEASE}.${INSTANTCLIENT_ARCH}.rpm"
+    )
 fi
 
 export DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
@@ -38,10 +67,12 @@ ensure_ubuntu_24() {
     fi
 }
 
-ensure_i386_architecture() {
-    if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
-        dpkg --add-architecture i386
-        apt-get update
+ensure_required_architecture() {
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        if ! dpkg --print-foreign-architectures | grep -qx 'i386'; then
+            dpkg --add-architecture i386
+            apt-get update
+        fi
     fi
 }
 
@@ -168,13 +199,28 @@ install_instantclient_rpms() {
 
 resolve_instantclient_layout() {
     local home_candidates=(
+        "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
     local include_candidates=(
+        "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
         "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
     )
+
+    if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+        home_candidates=(
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/lib/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+        include_candidates=(
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client32"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client"
+            "/usr/include/oracle/${INSTANTCLIENT_MAJOR}/client64"
+        )
+    fi
 
     local candidate
     for candidate in "${home_candidates[@]}"; do
@@ -209,74 +255,90 @@ resolve_instantclient_layout() {
 }
 
 ensure_ubuntu_24
-ensure_i386_architecture
+ensure_required_architecture
 refresh_repos
 
-install_packages \
-    build-essential \
-    alien \
-    autoconf \
-    automake \
-    binutils \
-    bzip2 \
-    elfutils \
-    gawk \
-    gcc \
-    g++ \
-    gcc-multilib \
-    libc6 \
-    libc6-dev \
-    libc6:i386 \
-    libc6-dev:i386 \
-    libstdc++6 \
-    libstdc++6:i386 \
-    libgcc-s1 \
-    libgcc-s1:i386 \
-    libexpat1 \
-    libexpat1-dev \
-    ksh \
-    less \
-    libaio-dev \
-    libaio1 \
-    libaio1:i386 \
-    libnsl-dev \
-    libnsl2 \
-    libnsl2:i386 \
-    libelf-dev \
-    libltdl7 \
-    libmotif-dev \
-    perl \
-    rlwrap \
-    rpm \
-    sysstat \
-    unixodbc \
-    unixodbc-dev \
-    unzip \
-    wget \
-    zenity \
-    zlib1g-dev \
-    zlib1g:i386 \
-    pkg-config \
-    libx11-6 \
-    libx11-6:i386 \
-    libxext6 \
-    libxext6:i386 \
-    libxft2 \
-    libxft2:i386 \
-    libxi6 \
-    libxi6:i386 \
-    libxtst6 \
-    libxtst6:i386 \
-    libxt6 \
-    libxt6:i386
+packages=(
+    build-essential
+    alien
+    autoconf
+    automake
+    binutils
+    bzip2
+    elfutils
+    gawk
+    gcc
+    g++
+    gcc-multilib
+    libc6
+    libc6-dev
+    libstdc++6
+    libgcc-s1
+    libexpat1
+    libexpat1-dev
+    ksh
+    less
+    libaio-dev
+    libaio1
+    libnsl-dev
+    libnsl2
+    libelf-dev
+    libltdl7
+    libmotif-dev
+    perl
+    rlwrap
+    rpm
+    sysstat
+    unixodbc
+    unixodbc-dev
+    unzip
+    wget
+    zenity
+    zlib1g-dev
+    pkg-config
+    libx11-6
+    libxext6
+    libxft2
+    libxi6
+    libxtst6
+    libxt6
+)
 
-install_optional_packages \
-    libmrm4 \
-    libmrm4:i386 \
-    libuil4 \
-    libuil4:i386 \
-    libxm4 \
-    libxm4:i386
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    packages+=(
+        libc6:i386
+        libc6-dev:i386
+        libstdc++6:i386
+        libgcc-s1:i386
+        libaio1:i386
+        libnsl2:i386
+        zlib1g:i386
+        libx11-6:i386
+        libxext6:i386
+        libxft2:i386
+        libxi6:i386
+        libxtst6:i386
+        libxt6:i386
+    )
+fi
+
+install_packages "${packages[@]}"
+
+optional_packages=(
+    libmrm4
+    libuil4
+    libxm4
+)
+
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    optional_packages+=(
+        libmrm4:i386
+        libuil4:i386
+        libxm4:i386
+    )
+fi
+
+install_optional_packages "${optional_packages[@]}"
 
 # Setup groups and an oracle user
 create_group oinstall
@@ -330,7 +392,12 @@ append_unique 'export ORACLE_HOME=$ORACLE_BASE/product/21/dbhome_1;' /home/oracl
 append_unique 'export ORACLE_SID=swg;' /home/oracle/.bashrc
 append_unique 'export ORACLE_UNQNAME=$ORACLE_SID;' /home/oracle/.bashrc
 append_unique 'export PATH=/usr/sbin:$ORACLE_HOME/bin:$PATH;' /home/oracle/.bashrc
-append_unique 'export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/i386-linux-gnu;' /home/oracle/.bashrc
+oracle_ld_library_path='$ORACLE_HOME/lib:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu'
+if [[ "$INSTANTCLIENT_ARCH" == "i386" ]]; then
+    oracle_ld_library_path+=':/usr/lib/i386-linux-gnu'
+fi
+oracle_ld_library_path+=';'
+append_unique "export LD_LIBRARY_PATH=${oracle_ld_library_path}" /home/oracle/.bashrc
 append_unique 'export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib;' /home/oracle/.bashrc
 
 # let's download and unpack the binary
